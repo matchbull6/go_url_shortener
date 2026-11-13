@@ -1,0 +1,14 @@
+*.exe
+/go_url_shortener
+*.test
+*.out
+
+.git/
+.vscode/
+.dockerignore
+.editorconfig
+.gitattributes
+.gitignore
+compose.yaml
+Dockerfile
+README.md

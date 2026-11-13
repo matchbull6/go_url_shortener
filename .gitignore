@@ -1,0 +1,4 @@
+*.exe
+/go_url_shortener
+*.test
+*.out
