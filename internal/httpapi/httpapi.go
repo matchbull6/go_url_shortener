@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -11,8 +12,8 @@ import (
 )
 
 type Service interface {
-	Shorten(longURL string) (string, error)
-	Resolve(code string) (string, error)
+	Shorten(ctx context.Context, longURL string) (string, error)
+	Resolve(ctx context.Context, code string) (string, error)
 }
 
 type handler struct {
@@ -32,7 +33,7 @@ func New(service Service, baseURL string) http.Handler {
 func (h *handler) redirect(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 
-	url, err := h.service.Resolve(code)
+	url, err := h.service.Resolve(r.Context(), code)
 	if errors.Is(err, shortener.ErrNotFound) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -66,7 +67,7 @@ func (h *handler) shorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, err := h.service.Shorten(req.URL)
+	code, err := h.service.Shorten(r.Context(), req.URL)
 	if errors.Is(err, shortener.ErrInvalidURL) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

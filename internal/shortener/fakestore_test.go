@@ -1,6 +1,7 @@
 package shortener_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/matchbull6/go_url_shortener/internal/shortener"
@@ -21,7 +22,7 @@ func newFakeStore() *fakeStore {
 	}
 }
 
-func (s *fakeStore) Get(code string) (string, error) {
+func (s *fakeStore) Get(_ context.Context, code string) (string, error) {
 	if s.getErr != nil {
 		return "", s.getErr
 	}
@@ -33,7 +34,7 @@ func (s *fakeStore) Get(code string) (string, error) {
 	return url, nil
 }
 
-func (s *fakeStore) Save(code, url string) error {
+func (s *fakeStore) Save(_ context.Context, code, url string) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}

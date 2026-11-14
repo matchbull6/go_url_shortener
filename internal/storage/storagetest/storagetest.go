@@ -19,13 +19,18 @@ func Run(t *testing.T, newStorage func(t *testing.T) storage.Storage) {
 }
 
 func testSaveThenGet(t *testing.T, s storage.Storage) {
-	const code, url = "abc123", "https://go.dev"
+	const (
+		code = "abc123"
+		url  = "https://go.dev"
+	)
 
-	if err := s.Save(code, url); err != nil {
+	ctx := t.Context()
+
+	if err := s.Save(ctx, code, url); err != nil {
 		t.Fatalf("Save(%q, %q) error = %v, want nil", code, url, err)
 	}
 
-	got, err := s.Get(code)
+	got, err := s.Get(ctx, code)
 	if err != nil {
 		t.Fatalf("Get(%q) error = %v, want nil", code, err)
 	}
@@ -37,7 +42,9 @@ func testSaveThenGet(t *testing.T, s storage.Storage) {
 func testGetNotFound(t *testing.T, s storage.Storage) {
 	const code = "missing"
 
-	got, err := s.Get(code)
+	ctx := t.Context()
+
+	got, err := s.Get(ctx, code)
 	if !errors.Is(err, storage.ErrNotFound) {
 		t.Errorf("Get(%q) error = %v, want %v", code, err, storage.ErrNotFound)
 	}
@@ -49,16 +56,18 @@ func testGetNotFound(t *testing.T, s storage.Storage) {
 func testSaveExistingCode(t *testing.T, s storage.Storage) {
 	const code, first, second = "abc123", "https://go.dev", "https://example.com"
 
-	if err := s.Save(code, first); err != nil {
+	ctx := t.Context()
+
+	if err := s.Save(ctx, code, first); err != nil {
 		t.Fatalf("Save(%q, %q) error = %v, want nil", code, first, err)
 	}
 
-	err := s.Save(code, second)
+	err := s.Save(ctx, code, second)
 	if !errors.Is(err, storage.ErrExists) {
 		t.Errorf("second Save(%q, %q) error = %v, want %v", code, second, err, storage.ErrExists)
 	}
 
-	got, err := s.Get(code)
+	got, err := s.Get(ctx, code)
 	if err != nil {
 		t.Fatalf("Get(%q) error = %v, want nil", code, err)
 	}
@@ -75,6 +84,8 @@ func testConcurrentSaveSameCode(t *testing.T, newStorage func(t *testing.T) stor
 		goroutines = 50
 	)
 
+	ctx := t.Context()
+
 	for round := range rounds {
 		s := newStorage(t)
 		start := make(chan struct{})
@@ -88,7 +99,7 @@ func testConcurrentSaveSameCode(t *testing.T, newStorage func(t *testing.T) stor
 			url := fmt.Sprintf("https://example.com/%d", i)
 			wg.Go(func() {
 				<-start
-				err := s.Save(code, url)
+				err := s.Save(ctx, code, url)
 				switch {
 				case err == nil:
 					mu.Lock()
@@ -105,7 +116,7 @@ func testConcurrentSaveSameCode(t *testing.T, newStorage func(t *testing.T) stor
 		if len(winners) != 1 {
 			t.Fatalf("round %d: Save succeeded %d times, want exactly 1 (winners: %q)", round, len(winners), winners)
 		}
-		got, err := s.Get(code)
+		got, err := s.Get(ctx, code)
 		if err != nil {
 			t.Fatalf("round %d: Get(%q) error = %v, want nil", round, code, err)
 		}

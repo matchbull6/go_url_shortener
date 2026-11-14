@@ -2,6 +2,7 @@
 package shortener
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -37,7 +38,7 @@ func New(store storage.Storage, codeLength int) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) Shorten(longURL string) (string, error) {
+func (s *Service) Shorten(ctx context.Context, longURL string) (string, error) {
 	if err := checkURL(longURL); err != nil {
 		return "", err
 	}
@@ -48,7 +49,7 @@ func (s *Service) Shorten(longURL string) (string, error) {
 			return "", err
 		}
 
-		err = s.store.Save(code, longURL)
+		err = s.store.Save(ctx, code, longURL)
 		if errors.Is(err, storage.ErrExists) {
 			continue
 		}
@@ -60,8 +61,8 @@ func (s *Service) Shorten(longURL string) (string, error) {
 	return "", ErrNoFreeCode
 }
 
-func (s *Service) Resolve(code string) (string, error) {
-	url, err := s.store.Get(code)
+func (s *Service) Resolve(ctx context.Context, code string) (string, error) {
+	url, err := s.store.Get(ctx, code)
 	if errors.Is(err, storage.ErrNotFound) {
 		return "", ErrNotFound
 	}

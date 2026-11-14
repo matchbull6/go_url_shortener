@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,12 +26,12 @@ type fakeService struct {
 	gotCode    string
 }
 
-func (f *fakeService) Shorten(longURL string) (string, error) {
+func (f *fakeService) Shorten(_ context.Context, longURL string) (string, error) {
 	f.gotURL = longURL
 	return f.shortenCode, f.shortenErr
 }
 
-func (f *fakeService) Resolve(code string) (string, error) {
+func (f *fakeService) Resolve(_ context.Context, code string) (string, error) {
 	f.gotCode = code
 	return f.resolveURL, f.resolveErr
 }

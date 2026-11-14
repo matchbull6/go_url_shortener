@@ -4,11 +4,15 @@
 *.out
 
 .git/
+.idea/
 .vscode/
 .dockerignore
 .editorconfig
+.env
+.env.example
 .gitattributes
 .gitignore
 compose.yaml
 Dockerfile
 README.md
+docker/

@@ -2,7 +2,10 @@
 // and must pass the tests in storagetest.
 package storage
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 var (
 	ErrNotFound = errors.New("storage: code not found")
@@ -10,9 +13,9 @@ var (
 )
 
 type Storage interface {
-	Get(code string) (string, error)
+	Get(ctx context.Context, code string) (string, error)
 
 	// If code is already taken it returns ErrExists and
 	// leaves the existing URL untouched.
-	Save(code, url string) error
+	Save(ctx context.Context, code, url string) error
 }

@@ -2,6 +2,7 @@
 package memory
 
 import (
+	"context"
 	"sync"
 
 	"github.com/matchbull6/go_url_shortener/internal/storage"
@@ -18,7 +19,7 @@ func New() *Store {
 	}
 }
 
-func (s *Store) Get(code string) (string, error) {
+func (s *Store) Get(_ context.Context, code string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	url, ok := s.links[code]
@@ -28,7 +29,7 @@ func (s *Store) Get(code string) (string, error) {
 	return url, nil
 }
 
-func (s *Store) Save(code, url string) error {
+func (s *Store) Save(_ context.Context, code, url string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

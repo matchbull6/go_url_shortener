@@ -14,13 +14,14 @@ func TestNew_UsesRealGenerator(t *testing.T) {
 	const url = "https://go.dev"
 	const length = 5
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	service, err := shortener.New(fake, length)
 	if err != nil {
-		t.Fatalf("New(store, %d) error = %v, want nil", shortener.DefaultCodeLength, err)
+		t.Fatalf("New(store, %d) error = %v, want nil", length, err)
 	}
 
-	code, err := service.Shorten(url)
+	code, err := service.Shorten(ctx, url)
 	if err != nil {
 		t.Fatalf("Shorten(%q) error = %v, want nil", url, err)
 	}
@@ -67,6 +68,7 @@ func TestShorten_Success(t *testing.T) {
 	const fixedCode = "fixed01"
 	const goodURL = "https://go.dev"
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	service := newService(t, fake)
 	calls := 0
@@ -75,7 +77,7 @@ func TestShorten_Success(t *testing.T) {
 		return fixedCode, nil
 	})
 
-	code, err := service.Shorten(goodURL)
+	code, err := service.Shorten(ctx, goodURL)
 	if err != nil {
 		t.Fatalf("Shorten(%q) error = %v, want nil", goodURL, err)
 	}
@@ -96,6 +98,7 @@ func TestShorten_Success(t *testing.T) {
 func TestShorten_InvalidURL(t *testing.T) {
 	const badURL = "javascript:alert(1)"
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	service := newService(t, fake)
 	calls := 0
@@ -104,7 +107,7 @@ func TestShorten_InvalidURL(t *testing.T) {
 		return "code01", nil
 	})
 
-	code, err := service.Shorten(badURL)
+	code, err := service.Shorten(ctx, badURL)
 	if !errors.Is(err, shortener.ErrInvalidURL) {
 		t.Errorf("Shorten(%q) error = %v, want %v", badURL, err, shortener.ErrInvalidURL)
 	}
@@ -127,6 +130,7 @@ func TestShorten_RetriesOnCollision(t *testing.T) {
 		freshCode = "fresh"
 	)
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	fake.links[takenCode] = takenURL
 
@@ -140,7 +144,7 @@ func TestShorten_RetriesOnCollision(t *testing.T) {
 		return freshCode, nil
 	})
 
-	code, err := service.Shorten(url)
+	code, err := service.Shorten(ctx, url)
 	if errors.Is(err, shortener.ErrNoFreeCode) {
 		t.Fatalf("Shorten(%q) gave up with %v after %d calls, want success on attempt %d",
 			url, err, calls, shortener.MaxAttempts)
@@ -172,6 +176,7 @@ func TestShorten_NoFreeCode(t *testing.T) {
 		takenCode = "taken"
 	)
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	fake.links[takenCode] = takenURL
 
@@ -182,7 +187,7 @@ func TestShorten_NoFreeCode(t *testing.T) {
 		return takenCode, nil
 	})
 
-	code, err := service.Shorten(url)
+	code, err := service.Shorten(ctx, url)
 	if !errors.Is(err, shortener.ErrNoFreeCode) {
 		t.Fatalf("Shorten(%q) error = %v, want %v", url, err, shortener.ErrNoFreeCode)
 	}
@@ -204,6 +209,7 @@ func TestShorten_StorageErrorNotRetried(t *testing.T) {
 	const url = "https://example.com"
 	errDB := errors.New("db down")
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	fake.saveErr = errDB
 
@@ -214,7 +220,7 @@ func TestShorten_StorageErrorNotRetried(t *testing.T) {
 		return "code01", nil
 	})
 
-	code, err := service.Shorten(url)
+	code, err := service.Shorten(ctx, url)
 	if !errors.Is(err, errDB) {
 		t.Errorf("Shorten(%q) error = %v, want %v", url, err, errDB)
 	}
@@ -233,8 +239,8 @@ func TestShorten_GeneratorError(t *testing.T) {
 	const url = "https://example.com"
 	errRand := errors.New("rand failed")
 
+	ctx := t.Context()
 	fake := newFakeStore()
-
 	service := newService(t, fake)
 	calls := 0
 	shortener.SetCodeGenerator(service, func() (string, error) {
@@ -242,7 +248,7 @@ func TestShorten_GeneratorError(t *testing.T) {
 		return "", errRand
 	})
 
-	code, err := service.Shorten(url)
+	code, err := service.Shorten(ctx, url)
 	if !errors.Is(err, errRand) {
 		t.Errorf("Shorten(%q) error = %v, want %v", url, err, errRand)
 	}
@@ -263,9 +269,10 @@ func TestResolve_Found(t *testing.T) {
 		want = "https://go.dev"
 	)
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	fake.links[code] = want
-	got, err := newService(t, fake).Resolve(code)
+	got, err := newService(t, fake).Resolve(ctx, code)
 	if err != nil {
 		t.Fatalf("Resolve(%q) error = %v, want nil", code, err)
 	}
@@ -277,8 +284,9 @@ func TestResolve_Found(t *testing.T) {
 func TestResolve_NotFound(t *testing.T) {
 	const code = "code1"
 
+	ctx := t.Context()
 	fake := newFakeStore()
-	got, err := newService(t, fake).Resolve(code)
+	got, err := newService(t, fake).Resolve(ctx, code)
 	if !errors.Is(err, shortener.ErrNotFound) {
 		t.Errorf("Resolve(%q) error = %v, want %v", code, err, shortener.ErrNotFound)
 	}
@@ -291,9 +299,10 @@ func TestResolve_StorageError(t *testing.T) {
 	const code = "code1"
 	errDB := errors.New("db down")
 
+	ctx := t.Context()
 	fake := newFakeStore()
 	fake.getErr = errDB
-	got, err := newService(t, fake).Resolve(code)
+	got, err := newService(t, fake).Resolve(ctx, code)
 
 	if !errors.Is(err, errDB) {
 		t.Errorf("Resolve(%q) error = %v, want %v", code, err, errDB)
