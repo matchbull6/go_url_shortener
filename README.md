@@ -11,6 +11,7 @@ A URL shortener in Go: takes a long URL, returns a short code, and redirects by 
 
 `POST /api/shorten` errors:
 - `400` — invalid JSON or URL (the body explains why);
+- `413` — request body is larger than 4 KiB;
 - `503` + `Retry-After: 1` — no free code found, retry the request;
 - `500` — internal error (details only in the log).
 
@@ -119,8 +120,8 @@ There is no HTTPS or rate limiting yet. The port is published on localhost only
 - [x] **1. MVP:** in-memory storage, `POST /api/shorten`, `GET /{code}`
 - [x] **2. Tests:** unit tests for the generator and storage, `httptest` for handlers, `go test -race`
 - [ ] **3. Reliability:**
-  - [x] URL validation, `MaxBytesReader`, `slog`, config via environment variables, graceful shutdown, server timeouts
-  - [ ] JSON error format, `413` for oversized bodies
+  - [x] URL validation, `MaxBytesReader`, `slog`, config via environment variables, graceful shutdown, server timeouts, `413` for oversized bodies
+  - [ ] JSON error format
 - [x] **4. Persistence:** PostgreSQL + migrations, the storage interface stays the same
 - [ ] **5. Analytics:** click counter, `GET /api/links/{code}/stats`
 - [ ] **6. Ops:**

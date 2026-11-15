@@ -120,6 +120,22 @@ func TestShorten_Success(t *testing.T) {
 	}
 }
 
+func TestShorten_BodyTooLarge(t *testing.T) {
+	fake := &fakeService{}
+
+	body := strings.NewReader(`{"url":"https://example.com/` + strings.Repeat("a", 5000) + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
+	rec := httptest.NewRecorder()
+	httpapi.New(fake, "http://short.test").ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+	if fake.gotURL != "" {
+		t.Errorf("Shorten called with %q, want no call", fake.gotURL)
+	}
+}
+
 func TestShorten_BadJSON(t *testing.T) {
 	fake := &fakeService{}
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -63,6 +64,10 @@ func (h *handler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	var req shortenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if maxErr, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			http.Error(w, fmt.Sprintf("body too large, limit is %d bytes", maxErr.Limit), http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
