@@ -119,8 +119,8 @@ There is no HTTPS or rate limiting yet. The port is published on localhost only
 - [x] **1. MVP:** in-memory storage, `POST /api/shorten`, `GET /{code}`
 - [x] **2. Tests:** unit tests for the generator and storage, `httptest` for handlers, `go test -race`
 - [ ] **3. Reliability:**
-  - [x] URL validation, `MaxBytesReader`, `slog`, config via environment variables, graceful shutdown
-  - [ ] server timeouts, JSON error format, `413` for oversized bodies
+  - [x] URL validation, `MaxBytesReader`, `slog`, config via environment variables, graceful shutdown, server timeouts
+  - [ ] JSON error format, `413` for oversized bodies
 - [x] **4. Persistence:** PostgreSQL + migrations, the storage interface stays the same
 - [ ] **5. Analytics:** click counter, `GET /api/links/{code}/stats`
 - [ ] **6. Ops:**
