@@ -9,11 +9,22 @@ A URL shortener in Go: takes a long URL, returns a short code, and redirects by 
 | POST   | `/api/shorten` | `{"url": "https://..."}` → `201` `{"code": "aB3xK9z", "short_url": "<BASE_URL>/aB3xK9z"}` |
 | GET    | `/{code}`      | `302` to the original URL or `404` |
 
-`POST /api/shorten` errors:
-- `400` — invalid JSON or URL (the body explains why);
-- `413` — request body is larger than 4 KiB;
-- `503` + `Retry-After: 1` — no free code found, retry the request;
-- `500` — internal error (details only in the log).
+Errors are JSON with a stable machine-readable `code` and a human-readable `message`:
+
+```json
+{"error": {"code": "invalid_url", "message": "shortener: invalid URL: missing host"}}
+```
+
+| Status | `code`           | When |
+|--------|------------------|------|
+| `400`  | `invalid_json`   | the body is not valid JSON |
+| `400`  | `invalid_url`    | the URL is rejected (`message` explains why) |
+| `404`  | `not_found`      | unknown short code |
+| `413`  | `body_too_large` | request body is larger than 4 KiB |
+| `503`  | `no_free_code`   | no free code found, retry the request (`Retry-After: 1`) |
+| `500`  | `internal`       | internal error (details only in the log) |
+
+Match on `code`; `message` may change.
 
 ## Configuration (environment variables)
 
@@ -119,9 +130,8 @@ There is no HTTPS or rate limiting yet. The port is published on localhost only
 
 - [x] **1. MVP:** in-memory storage, `POST /api/shorten`, `GET /{code}`
 - [x] **2. Tests:** unit tests for the generator and storage, `httptest` for handlers, `go test -race`
-- [ ] **3. Reliability:**
-  - [x] URL validation, `MaxBytesReader`, `slog`, config via environment variables, graceful shutdown, server timeouts, `413` for oversized bodies
-  - [ ] JSON error format
+- [x] **3. Reliability:** URL validation, `MaxBytesReader`, `slog`, config via environment variables,
+  graceful shutdown, server timeouts, JSON errors, `413` for oversized bodies
 - [x] **4. Persistence:** PostgreSQL + migrations, the storage interface stays the same
 - [ ] **5. Analytics:** click counter, `GET /api/links/{code}/stats`
 - [ ] **6. Ops:**

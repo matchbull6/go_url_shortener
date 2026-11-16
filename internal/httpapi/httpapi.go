@@ -36,12 +36,12 @@ func (h *handler) redirect(w http.ResponseWriter, r *http.Request) {
 
 	url, err := h.service.Resolve(r.Context(), code)
 	if errors.Is(err, shortener.ErrNotFound) {
-		http.Error(w, "not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "not_found", "not found")
 		return
 	}
 	if err != nil {
 		slog.Error("resolve failed", "code", code, "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
 
@@ -65,27 +65,28 @@ func (h *handler) shorten(w http.ResponseWriter, r *http.Request) {
 	var req shortenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if maxErr, ok := errors.AsType[*http.MaxBytesError](err); ok {
-			http.Error(w, fmt.Sprintf("body too large, limit is %d bytes", maxErr.Limit), http.StatusRequestEntityTooLarge)
+			msg := fmt.Sprintf("body too large, limit is %d bytes", maxErr.Limit)
+			writeError(w, http.StatusRequestEntityTooLarge, "body_too_large", msg)
 			return
 		}
-		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
 		return
 	}
 
 	code, err := h.service.Shorten(r.Context(), req.URL)
 	if errors.Is(err, shortener.ErrInvalidURL) {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid_url", err.Error())
 		return
 	}
 	if errors.Is(err, shortener.ErrNoFreeCode) {
 		slog.Warn("no free short code", "url", req.URL, "err", err)
 		w.Header().Set("Retry-After", "1")
-		http.Error(w, "no free short code, try again", http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "no_free_code", "no free short code, try again")
 		return
 	}
 	if err != nil {
 		slog.Error("shorten failed", "url", req.URL, "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
 		return
 	}
 
@@ -94,5 +95,24 @@ func (h *handler) shorten(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("write response failed", "err", err)
+	}
+}
+
+type errorResponse struct {
+	Error errorBody `json:"error"`
+}
+
+type errorBody struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func writeError(w http.ResponseWriter, status int, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	resp := errorResponse{Error: errorBody{Code: code, Message: msg}}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		slog.Error("write error response failed", "err", err)
 	}
 }
