@@ -3,6 +3,7 @@ package shortener_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/matchbull6/go_url_shortener/internal/shortener"
 	"github.com/matchbull6/go_url_shortener/internal/storage"
@@ -11,27 +12,42 @@ import (
 var _ storage.Storage = (*fakeStore)(nil)
 
 type fakeStore struct {
-	links   map[string]string
-	saveErr error
-	getErr  error
+	links    map[string]storage.Link
+	getErr   error
+	visitErr error
+	saveErr  error
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		links: make(map[string]string),
+		links: make(map[string]storage.Link),
 	}
 }
 
-func (s *fakeStore) Get(_ context.Context, code string) (string, error) {
+func (s *fakeStore) Get(_ context.Context, code string) (storage.Link, error) {
 	if s.getErr != nil {
-		return "", s.getErr
+		return storage.Link{}, s.getErr
 	}
 
-	url, ok := s.links[code]
+	link, ok := s.links[code]
+	if !ok {
+		return storage.Link{}, storage.ErrNotFound
+	}
+	return link, nil
+}
+
+func (s *fakeStore) Visit(_ context.Context, code string) (string, error) {
+	if s.visitErr != nil {
+		return "", s.visitErr
+	}
+
+	link, ok := s.links[code]
 	if !ok {
 		return "", storage.ErrNotFound
 	}
-	return url, nil
+	link.Clicks++
+	s.links[code] = link
+	return link.URL, nil
 }
 
 func (s *fakeStore) Save(_ context.Context, code, url string) error {
@@ -43,7 +59,7 @@ func (s *fakeStore) Save(_ context.Context, code, url string) error {
 		return storage.ErrExists
 	}
 
-	s.links[code] = url
+	s.links[code] = storage.Link{Code: code, URL: url, CreatedAt: time.Now()}
 	return nil
 }
 

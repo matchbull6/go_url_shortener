@@ -4,29 +4,44 @@ package memory
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/matchbull6/go_url_shortener/internal/storage"
 )
 
 type Store struct {
 	mu    sync.RWMutex
-	links map[string]string
+	links map[string]storage.Link
 }
 
 func New() *Store {
 	return &Store{
-		links: make(map[string]string),
+		links: make(map[string]storage.Link),
 	}
 }
 
-func (s *Store) Get(_ context.Context, code string) (string, error) {
+func (s *Store) Get(_ context.Context, code string) (storage.Link, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	url, ok := s.links[code]
+	link, ok := s.links[code]
+	if !ok {
+		return storage.Link{}, storage.ErrNotFound
+	}
+	return link, nil
+}
+
+func (s *Store) Visit(_ context.Context, code string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	link, ok := s.links[code]
 	if !ok {
 		return "", storage.ErrNotFound
 	}
-	return url, nil
+
+	link.Clicks++
+	s.links[code] = link
+	return link.URL, nil
 }
 
 func (s *Store) Save(_ context.Context, code, url string) error {
@@ -37,6 +52,6 @@ func (s *Store) Save(_ context.Context, code, url string) error {
 		return storage.ErrExists
 	}
 
-	s.links[code] = url
+	s.links[code] = storage.Link{Code: code, URL: url, CreatedAt: time.Now()}
 	return nil
 }

@@ -31,14 +31,30 @@ func New(ctx context.Context, dbURL string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
-func (s *Store) Get(ctx context.Context, code string) (string, error) {
+func (s *Store) Get(ctx context.Context, code string) (storage.Link, error) {
+	var link storage.Link
+	err := s.pool.QueryRow(ctx,
+		`SELECT code, url, clicks, created_at FROM links WHERE code = $1`, code).
+		Scan(&link.Code, &link.URL, &link.Clicks, &link.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return storage.Link{}, storage.ErrNotFound
+	}
+	if err != nil {
+		return storage.Link{}, fmt.Errorf("postgres: get %q: %w", code, err)
+	}
+	return link, nil
+}
+
+func (s *Store) Visit(ctx context.Context, code string) (string, error) {
 	var url string
-	err := s.pool.QueryRow(ctx, `SELECT url FROM links WHERE code = $1`, code).Scan(&url)
+	err := s.pool.QueryRow(ctx,
+		`UPDATE links SET clicks = clicks + 1 WHERE code = $1 RETURNING url`, code).
+		Scan(&url)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", storage.ErrNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("postgres: get %q: %w", code, err)
+		return "", fmt.Errorf("postgres: visit %q: %w", code, err)
 	}
 	return url, nil
 }

@@ -4,8 +4,10 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/matchbull6/go_url_shortener/internal/shortener"
+	"github.com/matchbull6/go_url_shortener/internal/storage"
 )
 
 // Every other test replaces newCode, so this is the only one that checks
@@ -28,8 +30,8 @@ func TestNew_UsesRealGenerator(t *testing.T) {
 	if len(code) != length {
 		t.Errorf("Shorten(%q) = %q, len %d, want len %d", url, code, len(code), length)
 	}
-	if fake.links[code] != url {
-		t.Errorf("store[%q] = %q after Shorten, want %q", code, fake.links[code], url)
+	if got := fake.links[code].URL; got != url {
+		t.Errorf("store[%q] = %q after Shorten, want %q", code, got, url)
 	}
 }
 
@@ -87,8 +89,8 @@ func TestShorten_Success(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("newCode called %d times, want 1", calls)
 	}
-	if fake.links[fixedCode] != goodURL {
-		t.Errorf("store[%q] = %q after Shorten, want %q", fixedCode, fake.links[fixedCode], goodURL)
+	if got := fake.links[fixedCode].URL; got != goodURL {
+		t.Errorf("store[%q] = %q after Shorten, want %q", fixedCode, got, goodURL)
 	}
 	if len(fake.links) != 1 {
 		t.Errorf("store has %d links, want 1: %v", len(fake.links), fake.links)
@@ -132,7 +134,7 @@ func TestShorten_RetriesOnCollision(t *testing.T) {
 
 	ctx := t.Context()
 	fake := newFakeStore()
-	fake.links[takenCode] = takenURL
+	fake.links[takenCode] = storage.Link{Code: takenCode, URL: takenURL, CreatedAt: time.Now()}
 
 	service := newService(t, fake)
 	calls := 0
@@ -158,10 +160,10 @@ func TestShorten_RetriesOnCollision(t *testing.T) {
 	if calls != shortener.MaxAttempts {
 		t.Errorf("newCode called %d times, want %d", calls, shortener.MaxAttempts)
 	}
-	if got := fake.links[freshCode]; got != url {
+	if got := fake.links[freshCode].URL; got != url {
 		t.Errorf("store[%q] = %q, want %q", freshCode, got, url)
 	}
-	if got := fake.links[takenCode]; got != takenURL {
+	if got := fake.links[takenCode].URL; got != takenURL {
 		t.Errorf("store[%q] = %q, want %q (existing link overwritten)", takenCode, got, takenURL)
 	}
 	if len(fake.links) != 2 {
@@ -178,7 +180,7 @@ func TestShorten_NoFreeCode(t *testing.T) {
 
 	ctx := t.Context()
 	fake := newFakeStore()
-	fake.links[takenCode] = takenURL
+	fake.links[takenCode] = storage.Link{Code: takenCode, URL: takenURL, CreatedAt: time.Now()}
 
 	service := newService(t, fake)
 	calls := 0
@@ -197,7 +199,7 @@ func TestShorten_NoFreeCode(t *testing.T) {
 	if calls != shortener.MaxAttempts {
 		t.Errorf("newCode called %d times, want %d", calls, shortener.MaxAttempts)
 	}
-	if got := fake.links[takenCode]; got != takenURL {
+	if got := fake.links[takenCode].URL; got != takenURL {
 		t.Errorf("store[%q] = %q, want %q (existing link overwritten)", takenCode, got, takenURL)
 	}
 	if len(fake.links) != 1 {
@@ -265,19 +267,22 @@ func TestShorten_GeneratorError(t *testing.T) {
 
 func TestResolve_Found(t *testing.T) {
 	const (
-		code = "code1"
-		want = "https://go.dev"
+		code    = "code1"
+		wantURL = "https://go.dev"
 	)
 
 	ctx := t.Context()
 	fake := newFakeStore()
-	fake.links[code] = want
+	fake.links[code] = storage.Link{Code: code, URL: wantURL, CreatedAt: time.Now()}
 	got, err := newService(t, fake).Resolve(ctx, code)
 	if err != nil {
 		t.Fatalf("Resolve(%q) error = %v, want nil", code, err)
 	}
-	if got != want {
-		t.Errorf("Resolve(%q) = %q, want %q", code, got, want)
+	if got != wantURL {
+		t.Errorf("Resolve(%q) = %q, want %q", code, got, wantURL)
+	}
+	if clicks := fake.links[code].Clicks; clicks != 1 {
+		t.Errorf("Clicks after Resolve = %d, want 1", clicks)
 	}
 }
 
@@ -301,7 +306,7 @@ func TestResolve_StorageError(t *testing.T) {
 
 	ctx := t.Context()
 	fake := newFakeStore()
-	fake.getErr = errDB
+	fake.visitErr = errDB
 	got, err := newService(t, fake).Resolve(ctx, code)
 
 	if !errors.Is(err, errDB) {
@@ -312,5 +317,64 @@ func TestResolve_StorageError(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("Resolve(%q) = %q, want empty string", code, got)
+	}
+}
+
+func TestStats_Found(t *testing.T) {
+	const (
+		code   = "code1"
+		url    = "https://go.dev"
+		clicks = 7
+	)
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	initial := storage.Link{Code: code, URL: url, Clicks: clicks, CreatedAt: created}
+	want := shortener.Link{Code: code, URL: url, Clicks: clicks, CreatedAt: created}
+
+	ctx := t.Context()
+	fake := newFakeStore()
+	fake.links[code] = initial
+	got, err := newService(t, fake).Stats(ctx, code)
+	if err != nil {
+		t.Fatalf("Stats(%q) error = %v, want nil", code, err)
+	}
+	if got != want {
+		t.Errorf("Stats(%q) = %+v, want %+v", code, got, want)
+	}
+	if got := fake.links[code].Clicks; got != clicks {
+		t.Errorf("Clicks after Stats = %d, want %d (Stats must not count a click)", got, clicks)
+	}
+}
+
+func TestStats_NotFound(t *testing.T) {
+	const code = "code1"
+
+	ctx := t.Context()
+	fake := newFakeStore()
+	got, err := newService(t, fake).Stats(ctx, code)
+	if !errors.Is(err, shortener.ErrNotFound) {
+		t.Errorf("Stats(%q) error = %v, want %v", code, err, shortener.ErrNotFound)
+	}
+	if (got != shortener.Link{}) {
+		t.Errorf("Stats(%q) = %+v, want shortener.Link{}", code, got)
+	}
+}
+
+func TestStats_StorageError(t *testing.T) {
+	const code = "code1"
+	errDB := errors.New("db down")
+
+	ctx := t.Context()
+	fake := newFakeStore()
+	fake.getErr = errDB
+	got, err := newService(t, fake).Stats(ctx, code)
+
+	if !errors.Is(err, errDB) {
+		t.Errorf("Stats(%q) error = %v, want %v", code, err, errDB)
+	}
+	if errors.Is(err, shortener.ErrNotFound) {
+		t.Errorf("Stats(%q) error = %v, must not be %v", code, err, shortener.ErrNotFound)
+	}
+	if (got != shortener.Link{}) {
+		t.Errorf("Stats(%q) = %+v, want shortener.Link{}", code, got)
 	}
 }

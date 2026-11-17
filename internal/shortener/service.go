@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/matchbull6/go_url_shortener/internal/storage"
 )
@@ -21,6 +22,13 @@ const (
 )
 
 const maxAttempts = 5
+
+type Link struct {
+	Code      string
+	URL       string
+	Clicks    int64
+	CreatedAt time.Time
+}
 
 type Service struct {
 	store   storage.Storage
@@ -62,7 +70,7 @@ func (s *Service) Shorten(ctx context.Context, longURL string) (string, error) {
 }
 
 func (s *Service) Resolve(ctx context.Context, code string) (string, error) {
-	url, err := s.store.Get(ctx, code)
+	url, err := s.store.Visit(ctx, code)
 	if errors.Is(err, storage.ErrNotFound) {
 		return "", ErrNotFound
 	}
@@ -70,4 +78,20 @@ func (s *Service) Resolve(ctx context.Context, code string) (string, error) {
 		return "", err
 	}
 	return url, nil
+}
+
+func (s *Service) Stats(ctx context.Context, code string) (Link, error) {
+	link, err := s.store.Get(ctx, code)
+	if errors.Is(err, storage.ErrNotFound) {
+		return Link{}, ErrNotFound
+	}
+	if err != nil {
+		return Link{}, err
+	}
+	return Link{
+		Code:      link.Code,
+		URL:       link.URL,
+		Clicks:    link.Clicks,
+		CreatedAt: link.CreatedAt,
+	}, nil
 }

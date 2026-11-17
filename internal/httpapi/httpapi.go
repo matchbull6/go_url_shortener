@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/matchbull6/go_url_shortener/internal/shortener"
 )
@@ -15,6 +16,7 @@ import (
 type Service interface {
 	Shorten(ctx context.Context, longURL string) (string, error)
 	Resolve(ctx context.Context, code string) (string, error)
+	Stats(ctx context.Context, code string) (shortener.Link, error)
 }
 
 type handler struct {
@@ -28,6 +30,7 @@ func New(service Service, baseURL string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{code}", h.redirect)
 	mux.HandleFunc("POST /api/shorten", h.shorten)
+	mux.HandleFunc("GET /api/links/{code}/stats", h.stats)
 	return mux
 }
 
@@ -93,6 +96,42 @@ func (h *handler) shorten(w http.ResponseWriter, r *http.Request) {
 	resp := shortenResponse{Code: code, ShortURL: h.baseURL + "/" + code}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		slog.Error("write response failed", "err", err)
+	}
+}
+
+type statsResponse struct {
+	Code      string    `json:"code"`
+	URL       string    `json:"url"`
+	ShortURL  string    `json:"short_url"`
+	Clicks    int64     `json:"clicks"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (h *handler) stats(w http.ResponseWriter, r *http.Request) {
+	code := r.PathValue("code")
+
+	link, err := h.service.Stats(r.Context(), code)
+	if errors.Is(err, shortener.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	if err != nil {
+		slog.Error("stats failed", "code", code, "err", err)
+		writeError(w, http.StatusInternalServerError, "internal", "internal error")
+		return
+	}
+
+	resp := statsResponse{
+		Code:      link.Code,
+		URL:       link.URL,
+		ShortURL:  h.baseURL + "/" + link.Code,
+		Clicks:    link.Clicks,
+		CreatedAt: link.CreatedAt.UTC(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		slog.Error("write response failed", "err", err)
 	}

@@ -7,7 +7,18 @@ A URL shortener in Go: takes a long URL, returns a short code, and redirects by 
 | Method | Path           | Response |
 |--------|----------------|----------|
 | POST   | `/api/shorten` | `{"url": "https://..."}` → `201` `{"code": "aB3xK9z", "short_url": "<BASE_URL>/aB3xK9z"}` |
-| GET    | `/{code}`      | `302` to the original URL or `404` |
+| GET    | `/{code}`      | `302` to the original URL or `404`; counts a click |
+| GET    | `/api/links/{code}/stats` | `200` with link stats (below) or `404`; does not count a click |
+
+```json
+{
+  "code": "aB3xK9z",
+  "url": "https://go.dev",
+  "short_url": "<BASE_URL>/aB3xK9z",
+  "clicks": 42,
+  "created_at": "2026-01-02T00:04:05Z"
+}
+```
 
 Errors are JSON with a stable machine-readable `code` and a human-readable `message`:
 
@@ -49,13 +60,12 @@ go build -o go_url_shortener.exe .
 
 With PostgreSQL:
 
-```sh
-STORAGE=postgres DATABASE_URL="postgres://user:pass@localhost:5432/shortener?sslmode=disable" go run .
-```
-
-PowerShell:
 
 ```powershell
+# sh
+STORAGE=postgres DATABASE_URL="postgres://user:pass@localhost:5432/shortener?sslmode=disable" go run .
+
+# PowerShell
 $env:STORAGE = "postgres"
 $env:DATABASE_URL = "postgres://user:pass@localhost:5432/shortener?sslmode=disable"
 go run .
@@ -71,7 +81,8 @@ go test -race ./...   # data race detector, needs cgo (gcc)
 PostgreSQL tests run only when `TEST_DATABASE_URL` is set, otherwise they are skipped.
 Use a separate database: the tests truncate its tables.
 
-```sh
+```powershell
+# sh
 TEST_DATABASE_URL="postgres://user:pass@localhost:5432/shortener_test?sslmode=disable" go test ./internal/storage/postgres/
 
 # PowerShell
@@ -85,10 +96,10 @@ go test ./internal/storage/postgres/
 main.go                         — env config, dependency wiring, server start
 internal/httpapi/               — handlers and routing
 internal/shortener/             — business logic
-    service.go                  — Service: Shorten and Resolve
+    service.go                  — Service: Shorten, Resolve, Stats
     code.go                     — code generation (crypto/rand)
     validate.go                 — URL validation
-internal/storage/               — contract: Storage interface + ErrNotFound, ErrExists
+internal/storage/               — contract: Storage interface, Link, ErrNotFound, ErrExists
 internal/storage/storagetest/   — shared contract tests for all implementations
 internal/storage/memory/        — in-memory implementation
 internal/storage/postgres/      — PostgreSQL implementation (pgx)
@@ -133,7 +144,7 @@ There is no HTTPS or rate limiting yet. The port is published on localhost only
 - [x] **3. Reliability:** URL validation, `MaxBytesReader`, `slog`, config via environment variables,
   graceful shutdown, server timeouts, JSON errors, `413` for oversized bodies
 - [x] **4. Persistence:** PostgreSQL + migrations, the storage interface stays the same
-- [ ] **5. Analytics:** click counter, `GET /api/links/{code}/stats`
+- [x] **5. Analytics:** click counter, `GET /api/links/{code}/stats`
 - [ ] **6. Ops:**
   - [x] Dockerfile, compose
   - [ ] rate limiting on link creation, reverse proxy + HTTPS
